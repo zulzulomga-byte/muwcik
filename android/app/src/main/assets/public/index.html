@@ -241,22 +241,11 @@
   }
   @media (max-width: 480px) {
     .stage { perspective: 900px; }
-    body {
-      padding: 20px 16px;
-      /* animating a full-screen gradient repaints the whole viewport every
-         frame — way too heavy for phone GPUs, so freeze it on mobile */
-      animation: none;
-      background-position: 0 0, 30% 40%;
-    }
+    body { padding: 20px 16px; }
     .card {
       width: min(360px, 84vw);
       height: min(660px, 76vh);
       border-radius: 32px;
-      /* backdrop blur is the single heaviest thing to render on phone GPUs —
-         swap it for a plain solid panel instead of resampling the animated
-         background behind it 60x a second */
-      backdrop-filter: none;
-      background: rgba(18, 10, 24, 0.94);
     }
   }
   @media (max-width: 480px) and (max-height: 700px) {
@@ -1262,11 +1251,7 @@
 
   const PALETTE = ["255,159,67", "217,79,140", "150,110,230", "245,238,247"];
   const particles = [];
-  // phone GPUs choke on: lots of particles, per-particle shadowBlur (a very
-  // expensive canvas operation), and the O(n²) line-linking below — so all
-  // three get scaled down on small screens instead of on desktop.
-  const isLowPower = window.matchMedia("(max-width: 480px)").matches;
-  const PARTICLE_COUNT = isLowPower ? 26 : 78;
+  const PARTICLE_COUNT = 78;
   function makeParticle(burst, originX, originY) {
     const ox = originX != null ? originX : cw / 2;
     const oy = originY != null ? originY : ch * 0.32;
@@ -1297,27 +1282,23 @@
     // faint constellation lines between nearby drifting motes — cheap
     // (only checks ambient, non-burst particles) and gives the field
     // some texture instead of just floating dust
-    // skipped entirely on phones: this is an O(n²) distance check every
-    // single frame, one of the costlier things happening in this loop
-    if (!isLowPower) {
-      const LINK_DIST = 130;
-      for (let i = 0; i < particles.length; i++) {
-        const a = particles[i];
-        if (a.life !== Infinity) continue;
-        for (let j = i + 1; j < particles.length; j++) {
-          const b = particles[j];
-          if (b.life !== Infinity) continue;
-          const dx = a.x - b.x, dy = a.y - b.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < LINK_DIST) {
-            const lineAlpha = (1 - dist / LINK_DIST) * 0.08 * (0.6 + bassLevel * 0.6);
-            ctx.beginPath();
-            ctx.strokeStyle = `rgba(245,238,247,${lineAlpha.toFixed(3)})`;
-            ctx.lineWidth = 1;
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-          }
+    const LINK_DIST = 130;
+    for (let i = 0; i < particles.length; i++) {
+      const a = particles[i];
+      if (a.life !== Infinity) continue;
+      for (let j = i + 1; j < particles.length; j++) {
+        const b = particles[j];
+        if (b.life !== Infinity) continue;
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < LINK_DIST) {
+          const lineAlpha = (1 - dist / LINK_DIST) * 0.08 * (0.6 + bassLevel * 0.6);
+          ctx.beginPath();
+          ctx.strokeStyle = `rgba(245,238,247,${lineAlpha.toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
         }
       }
     }
@@ -1342,10 +1323,8 @@
       const rad = p.r * (1 + kickLevel * 0.8);
       ctx.beginPath();
       ctx.fillStyle = `rgba(${p.color},${p.alpha.toFixed(3)})`;
-      if (!isLowPower) {
-        ctx.shadowColor = `rgba(${p.color},${Math.min(1, p.alpha * 1.5).toFixed(3)})`;
-        ctx.shadowBlur = 6 + kickLevel * 10;
-      }
+      ctx.shadowColor = `rgba(${p.color},${Math.min(1, p.alpha * 1.5).toFixed(3)})`;
+      ctx.shadowBlur = 6 + kickLevel * 10;
       ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -1439,16 +1418,8 @@
     return count ? sum / count / 255 : 0;
   }
 
-  let lowPowerFrameSkip = 0;
   function visualLoop() {
     requestAnimationFrame(visualLoop);
-    // phones get every other frame skipped entirely — halves canvas redraws,
-    // filter recalculations, and style writes below, which is where most of
-    // the jank was coming from. 30fps still reads as smooth for ambient fx.
-    if (isLowPower) {
-      lowPowerFrameSkip = (lowPowerFrameSkip + 1) % 2;
-      if (lowPowerFrameSkip !== 0) return;
-    }
     phase += 0.045;
 
     const cur = getCurrent();
@@ -1521,7 +1492,7 @@
       const hueShift = midSmooth * 40 - 12;
       artworkGlow.style.opacity = glowOpacity.toFixed(3);
       artworkGlow.style.transform = `scale(${glowScale.toFixed(3)})`;
-      artworkGlow.style.filter = `blur(${isLowPower ? 12 : 24}px) hue-rotate(${hueShift.toFixed(1)}deg)`;
+      artworkGlow.style.filter = `blur(24px) hue-rotate(${hueShift.toFixed(1)}deg)`;
     } else {
       artworkGlow.style.display = "none";
       artworkGlow.style.filter = "";
